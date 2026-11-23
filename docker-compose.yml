@@ -1,16 +1,56 @@
+# version: '3.7'
+# services:
+#   server:
+#     image: shmopen/code-push-server:latest
+#     volumes:
+#       - data-storage:/data/storage
+#       - data-tmp:/data/tmp
+#     environment:
+#       DOWNLOAD_URL: 'http://132.226.239.165:3000/download'
+#       TOKEN_SECRET: 'REPLACE_WITH_63_CHAR_RANDOM_TOKEN'
+#       RDS_HOST: 'mysql'
+#       RDS_USERNAME: 'codepush'
+#       RDS_PASSWORD: 'CHANGE_ME_DB_PASSWORD'
+#       RDS_DATABASE: 'codepush'
+#       STORAGE_DIR: '/data/storage'
+#       DATA_DIR: '/data/tmp'
+#       NODE_ENV: 'production'
+#       REDIS_HOST: 'redis'
+#     ports:
+#       - '3000:3000'
+#     depends_on:
+#       - mysql
+#       - redis
+#   mysql:
+#     image: mysql:latest
+#     volumes:
+#       - data-mysql:/var/lib/mysql
+#       - ./sql/codepush-all-docker.sql:/docker-entrypoint-initdb.d/codepush-all.sql
+#     environment:
+#       MYSQL_ALLOW_EMPTY_PASSWORD: 'On'
+#   redis:
+#     image: redis:latest
+#     volumes:
+#       - data-redis:/data
+# volumes:
+#   data-storage:'/home/node/code-push-server/data/storage'
+#   data-tmp:'/home/node/code-push-server/data/tmp'
+#   data-mysql:'/home/node/code-push-server/data/mysql'
+#   data-redis:'/home/node/code-push-server/data/redis'
 version: '3.7'
 services:
   server:
     image: shmopen/code-push-server:latest
+    platform: linux/arm64
     volumes:
-      - data-storage:/data/storage
-      - data-tmp:/data/tmp
+      - /home/node/code-push-server/data/storage:/data/storage
+      - /home/node/code-push-server/data/tmp:/data/tmp
     environment:
-      DOWNLOAD_URL: 'http://YOUR_MACHINE_IP:3000/download'
-      TOKEN_SECRET: 'YOUR_JWT_TOKEN_SECRET'
+      DOWNLOAD_URL: 'http://132.226.239.165:3000/download'
+      TOKEN_SECRET: 'REPLACE_WITH_63_CHAR_RANDOM_TOKEN'
       RDS_HOST: 'mysql'
       RDS_USERNAME: 'codepush'
-      RDS_PASSWORD: '123456'
+      RDS_PASSWORD: 'CHANGE_ME_DB_PASSWORD'
       RDS_DATABASE: 'codepush'
       STORAGE_DIR: '/data/storage'
       DATA_DIR: '/data/tmp'
@@ -24,16 +64,11 @@ services:
   mysql:
     image: mysql:latest
     volumes:
-      - data-mysql:/var/lib/mysql
+      - /home/node/code-push-server/data/mysql:/var/lib/mysql
       - ./sql/codepush-all-docker.sql:/docker-entrypoint-initdb.d/codepush-all.sql
     environment:
       MYSQL_ALLOW_EMPTY_PASSWORD: 'On'
   redis:
     image: redis:latest
     volumes:
-      - data-redis:/data
-volumes:
-  data-storage:
-  data-tmp:
-  data-mysql:
-  data-redis:
+      - /home/node/code-push-server/data/redis:/data

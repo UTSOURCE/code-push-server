@@ -8,6 +8,13 @@ import { app } from './app';
 import { CURRENT_DB_VERSION } from './core/const';
 import { Versions } from './models/versions';
 
+// 生产环境强制显式配置 TOKEN_SECRET：缺失时 config 会生成随机密钥，
+// 导致每次重启后所有已签发 JWT 失效（用户被无端登出）。
+if (process.env.NODE_ENV === 'production' && !process.env.TOKEN_SECRET) {
+    logger.error('FATAL: TOKEN_SECRET must be set in production (see /root/.pm2/code-push.env)');
+    process.exit(1);
+}
+
 /**
  * Normalize a port into a number, string, or false.
  */

@@ -17,3 +17,8 @@ node_modules/
 # vs code
 .history
 .idea
+
+# local runtime data / secrets (do not commit)
+data/
+.env
+code-push-server-shm-open_start.sh

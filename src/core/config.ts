@@ -1,4 +1,5 @@
 import os from 'os';
+import crypto from 'crypto';
 import {
     setLogTransports,
     ConsoleLogTransport,
@@ -30,10 +31,14 @@ export const config = {
     // Config for database, only support mysql.
     db: {
         username: process.env.RDS_USERNAME || 'root',
-        password: process.env.RDS_PASSWORD || 'password',
+        password: process.env.RDS_PASSWORD || '',
         database: process.env.RDS_DATABASE || 'codepush',
-        host: process.env.RDS_HOST || '127.0.0.1',
-        port: toNumber(process.env.RDS_PORT, 3306),
+        // host: process.env.RDS_HOST || '127.0.0.1',
+        // port: toNumber(process.env.RDS_PORT, 3306),
+        dialectOptions: {
+            // 将这里的 socketPath 修改为正确的路径
+            socketPath: '/tmp/mysql.sock'
+        },
         dialect: 'mysql',
         logging: false,
     },
@@ -89,7 +94,7 @@ export const config = {
     jwt: {
         // Recommended: 63 random alpha-numeric characters
         // Generate using: https://www.grc.com/passwords.htm
-        tokenSecret: process.env.TOKEN_SECRET || 'INSERT_RANDOM_TOKEN_KEY',
+        tokenSecret: process.env.TOKEN_SECRET || crypto.randomBytes(32).toString('hex'),
     },
     common: {
         // determine whether new account registrations are allowed

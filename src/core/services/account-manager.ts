@@ -129,18 +129,18 @@ class AccountManager {
                 }
                 return users;
             })
-            .then((users) => {
+            .then(async (users) => {
                 if (!passwordVerifySync(password, users.password)) {
                     if (tryLoginTimes > 0) {
                         const loginKey = `${LOGIN_LIMIT_PRE}${users.id}`;
-                        redisClient.exists(loginKey).then((isExists) => {
-                            if (!isExists) {
-                                const expires = moment().endOf('day').unix() - moment().unix();
-                                redisClient.setEx(loginKey, expires, '1');
-                                return;
-                            }
-                            redisClient.incr(loginKey);
-                        });
+                        // INCR is atomic and awaited. The previous exists()+setEx()
+                        // pair was fire-and-forget and racy: concurrent failed
+                        // logins could all observe "key missing" and reset the
+                        // counter to 1, making the lockout bypassable.
+                        const times = await redisClient.incr(loginKey);
+                        if (times === 1) {
+                            await redisClient.expireAt(loginKey, moment().endOf('day').unix());
+                        }
                     }
                     throw new AppError('您输入的邮箱或密码有误');
                 } else {

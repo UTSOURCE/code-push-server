@@ -2,12 +2,27 @@
   "apps": [
     {
       "name": "code-push-server",
-      "max_memory_restart": "500M",
-      "script": "code-push-server",
+      "max_memory_restart": "1024M",
+     "script": "./bin/www.js",
       "instances": "max",
       "exec_mode": "cluster",
       "env": {
-        "NODE_ENV": "production"
+        "NODE_ENV": "production",
+        "STORAGE_DIR": "",
+        "DOWNLOAD_URL": "https://codepushserver.zhangyuhai.eu.org/download",
+        "DATA_DIR": "",
+        "JWT_SECRET": "REPLACE_WITH_63_CHAR_RANDOM_TOKEN",
+        "RDS_USERNAME": "",
+        "RDS_PASSWORD":"CHANGE_ME_DB_PASSWORD",
+        "DB_PASSWORD": "CHANGE_ME_DB_PASSWORD",
+        "DB_HOST": "127.0.0.1",
+        "DB_PORT": "3306",
+        "DB_NAME": "codepush",
+        "REDIS_PASSWORD":"",
+        "ALLOW_REGISTRATION":true,
+        "UPDATE_CHECK_CACHE":true,
+        "ROLLOUT_CLIENT_UNIQUE_ID_CACHE":true,
+        "DIFF_NUMS":0
       }
     }
   ]
