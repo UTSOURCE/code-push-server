@@ -102,13 +102,27 @@ app.use((err: Error, req: Req, res: Res, next: NextFunction) => {
     if (err instanceof AppError) {
         res.status(err.status).send(err.message);
         thisLogger.debug(err);
-    } else {
-        // 中间件错误（如 body-parser 的 413 PayloadTooLarge）自带 status/statusCode，
-        // 一律按 500 处理会掩盖真实语义；仅 5xx 隐藏内部信息，详细内容进日志。
-        const status = (err as Error & { status?: number; statusCode?: number }).status
-            || (err as Error & { status?: number; statusCode?: number }).statusCode
-            || 500;
-        res.status(status).send(status >= 500 ? 'Internal Server Error' : err.message);
+        return;
+    }
+    // 扫描器/畸形 URL（如 /%C0、/..%C0%AF、/.env 探测）会让 Express 在解码参数时抛
+    // URIError。这属于客户端问题而非服务故障，记 warn 并返回 400，
+    // 避免把大量扫描噪音写进 error 日志、掩盖真实故障。
+    if (err instanceof URIError) {
+        res.status(400).send('Bad Request');
+        thisLogger.warn('malformed request url', { error: err.message });
+        return;
+    }
+    // 中间件错误（如 body-parser 的 413 PayloadTooLarge）自带 status/statusCode，
+    // 一律按 500 处理会掩盖真实语义；仅 5xx 隐藏内部信息，详细内容进日志。
+    const status =
+        (err as Error & { status?: number; statusCode?: number }).status ||
+        (err as Error & { status?: number; statusCode?: number }).statusCode ||
+        500;
+    res.status(status).send(status >= 500 ? 'Internal Server Error' : err.message);
+    // 4xx（客户端问题）记 warn，5xx（服务端故障）记 error，便于日志分级排查。
+    if (status >= 500) {
         thisLogger.error(err);
+    } else {
+        thisLogger.warn(err.message);
     }
 });

@@ -1,4 +1,4 @@
-import { Logger } from 'kv-logger';
+import { Logger, logger as rootLogger } from 'kv-logger';
 import _ from 'lodash';
 import { Op } from 'sequelize';
 import { Deployments } from '../../models/deployments';
@@ -37,6 +37,51 @@ interface UpdateCheckInfo {
 }
 
 class ClientManager {
+    /**
+     * 读缓存：redis 只是加速层，任何失败都降级为“未命中”去查数据库。
+     * 否则 redis 一宕机，App 的 update_check 就整体不可用（单点故障）。
+     */
+    private async cacheGet(key: string, logger?: Logger): Promise<string | null> {
+        const log = logger || rootLogger;
+        try {
+            return await redisClient.get(key);
+        } catch (e) {
+            log.warn &&
+                log.warn('redis cache get failed, fallback to db', {
+                    key,
+                    error: e && e.message ? e.message : String(e),
+                });
+            return null;
+        }
+    }
+
+    /**
+     * 写缓存：吞掉所有失败。redisClient.setEx 返回 Promise，若只包在 try/catch 里
+     * 无法捕获异步 rejection —— 未捕获 rejection 会让 Node 进程直接退出。
+     */
+    private cacheSetEx(key: string, ttl: number, value: string, logger?: Logger): Promise<void> {
+        const log = logger || rootLogger;
+        try {
+            return redisClient
+                .setEx(key, ttl, value)
+                .then(() => undefined)
+                .catch((e) => {
+                    log.warn &&
+                        log.warn('redis cache set failed', {
+                            key,
+                            error: e && e.message ? e.message : String(e),
+                        });
+                });
+        } catch (e) {
+            log.warn &&
+                log.warn('redis cache set threw synchronously', {
+                    key,
+                    error: e && e.message ? e.message : String(e),
+                });
+            return Promise.resolve();
+        }
+    }
+
     private getUpdateCheckCacheKey(deploymentKey, appVersion, label, packageHash) {
         return [UPDATE_CHECK, deploymentKey, appVersion, label, packageHash].join(':');
     }
@@ -51,16 +96,29 @@ class ClientManager {
             label,
             packageHash,
         );
-        return redisClient.keys(redisCacheKey).then((data) => {
-            if (_.isArray(data)) {
-                return Promise.all(
-                    data.map((key) => {
-                        return redisClient.del(key);
-                    }),
-                );
-            }
-            return null;
-        });
+        return redisClient
+            .keys(redisCacheKey)
+            .then((data) => {
+                if (_.isArray(data)) {
+                    return Promise.all(
+                        data.map((key) => {
+                            return redisClient.del(key);
+                        }),
+                    );
+                }
+                return null;
+            })
+            .catch((e) => {
+                // 缓存清理是尽力而为：调用处是 fire-and-forget（delay(...).then(...) 无 catch），
+                // redis 断线时 keys/del 会 reject，未捕获 rejection 会直接终止 Node 进程。
+                // 这里自行兜底并留痕，缓存最多短暂不一致（2.5s 后本就会自然失效）。
+                logger.warn &&
+                    logger.warn('clear update check cache failed', {
+                        key: redisCacheKey,
+                        error: e && e.message ? e.message : String(e),
+                    });
+                return null;
+            });
     }
 
     updateCheckFromCache(
@@ -87,7 +145,7 @@ class ClientManager {
             label,
             packageHash,
         );
-        return redisClient.get(redisCacheKey).then((data) => {
+        return this.cacheGet(redisCacheKey, logger).then((data) => {
             if (data) {
                 try {
                     logger.debug('updateCheckFromCache read from cache');
@@ -108,7 +166,7 @@ class ClientManager {
                 try {
                     logger.debug('updateCheckFromCache read from db');
                     const strRs = JSON.stringify(rs);
-                    redisClient.setEx(redisCacheKey, EXPIRED, strRs);
+                    this.cacheSetEx(redisCacheKey, EXPIRED, strRs, logger);
                 } catch (e) {
                     // do nothing
                 }
@@ -142,7 +200,7 @@ class ClientManager {
             return this.random(rollout);
         }
         const redisCacheKey = this.getChosenManCacheKey(packageId, rollout, clientUniqueId);
-        return redisClient.get(redisCacheKey).then((data) => {
+        return this.cacheGet(redisCacheKey).then((data) => {
             if (data === '1') {
                 return true;
             }
@@ -150,11 +208,9 @@ class ClientManager {
                 return false;
             }
             return this.random(rollout).then((r) => {
-                return redisClient
-                    .setEx(redisCacheKey, 60 * 60 * 24 * 7, r ? '1' : '2')
-                    .then(() => {
-                        return r;
-                    });
+                return this.cacheSetEx(redisCacheKey, 60 * 60 * 24 * 7, r ? '1' : '2').then(() => {
+                    return r;
+                });
             });
         });
     }
