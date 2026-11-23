@@ -268,6 +268,63 @@ class ClientManager {
             });
     }
 
+    /**
+     * 上报统计用的包定位：老客户端可能不带 label，仅带 app_version。
+     * 优先按 (deployment_key, label) 精确匹配；label 缺失时按 app_version
+     * 找对应 deployment version 的 current_package_id，再退回 deployment
+     * 的 last_deployment_version_id。任何一步失败都返回 undefined 让调用方跳过，
+     * 不影响上报接口返回 OK。
+     */
+    private async getPackagesForReport(deploymentKey, label, others, logger: Logger) {
+        if (_.isEmpty(deploymentKey)) {
+            return undefined;
+        }
+        if (!_.isEmpty(label)) {
+            try {
+                return await this.getPackagesInfo(deploymentKey, label);
+            } catch (e) {
+                logger && logger.warn && logger.warn('getPackagesForReport: label lookup failed', {
+                    deploymentKey,
+                    label,
+                    error: e && e.message ? e.message : String(e),
+                });
+                return undefined;
+            }
+        }
+        const appVersion = _.get(others, 'app_version');
+        const dep = await Deployments.findOne({ where: { deployment_key: deploymentKey } });
+        if (_.isEmpty(dep)) {
+            logger && logger.warn && logger.warn('getPackagesForReport: deployment not found', {
+                deploymentKey,
+            });
+            return undefined;
+        }
+        // 注意：DeploymentsVersions 的 id / last_deployment_version_id 是“版本记录 id”，
+        // 不是 package id；真正的包 id 在其 current_package_id 字段。
+        let dv;
+        if (!_.isEmpty(appVersion)) {
+            dv = await DeploymentsVersions.findOne({
+                where: { deployment_id: dep.id, app_version: appVersion },
+            });
+        }
+        if (_.isEmpty(dv)) {
+            dv = await DeploymentsVersions.findByPk(_.get(dep, 'last_deployment_version_id'));
+        }
+        const packageId = _.get(dv, 'current_package_id', 0);
+        if (!packageId || Number(packageId) < 0) {
+            logger && logger.warn && logger.warn('getPackagesForReport: no current package', {
+                deploymentKey,
+                appVersion,
+            });
+            return undefined;
+        }
+        const pkg = await Packages.findByPk(Number(packageId));
+        if (_.isEmpty(pkg) || !_.eq(pkg.deployment_id, dep.id)) {
+            return undefined;
+        }
+        return pkg;
+    }
+
     private getPackagesInfo(deploymentKey, label) {
         if (_.isEmpty(deploymentKey) || _.isEmpty(label)) {
             return Promise.reject(new AppError('please input deploymentKey and label'));
@@ -287,8 +344,11 @@ class ClientManager {
             });
     }
 
-    reportStatusDownload(deploymentKey, label, clientUniqueId) {
-        return this.getPackagesInfo(deploymentKey, label).then((packages) => {
+    reportStatusDownload(deploymentKey, label, clientUniqueId, others?, logger?: Logger) {
+        return this.getPackagesForReport(deploymentKey, label, others, logger).then((packages) => {
+            if (_.isEmpty(packages)) {
+                return undefined;
+            }
             return Promise.all([
                 PackagesMetrics.findOne({ where: { package_id: packages.id } }).then((metrics) => {
                     if (metrics) {
@@ -304,8 +364,11 @@ class ClientManager {
         });
     }
 
-    reportStatusDeploy(deploymentKey: string, label, clientUniqueId: string, others) {
-        return this.getPackagesInfo(deploymentKey, label).then((packages) => {
+    reportStatusDeploy(deploymentKey: string, label, clientUniqueId: string, others, logger?: Logger) {
+        return this.getPackagesForReport(deploymentKey, label, others, logger).then((packages) => {
+            if (_.isEmpty(packages)) {
+                return undefined;
+            }
             const statusText = _.get(others, 'status');
             let status = 0;
             if (_.eq(statusText, 'DeploymentSucceeded')) {

@@ -380,17 +380,29 @@ class PackageManager {
                             _.get(v, 'package_hash'),
                             _.get(v, 'blob_url'),
                             logger,
-                        ).then((oldPackageDataCenter) =>
-                            this.generateOneDiffPackage(
-                                diffWorkDirectoryPath,
-                                originalPackage.id,
-                                originDataCenter,
-                                oldPackageDataCenter,
-                                v.package_hash,
-                                v.manifest_blob_url,
-                                logger,
-                            ),
-                        );
+                        )
+                            .then((oldPackageDataCenter) =>
+                                this.generateOneDiffPackage(
+                                    diffWorkDirectoryPath,
+                                    originalPackage.id,
+                                    originDataCenter,
+                                    oldPackageDataCenter,
+                                    v.package_hash,
+                                    v.manifest_blob_url,
+                                    logger,
+                                ),
+                            )
+                            .catch((e) => {
+                                // 历史包 blob 可能缺失（如早期 tmpfs 存储丢失），单个 diff 失败
+                                // 不应让整批 diff 生成报错。降级为 warn 并留痕，不掩盖其它真错误。
+                                logger &&
+                                    logger.warn &&
+                                    logger.warn('skip diff package for missing history blob', {
+                                        packageHash: _.get(v, 'package_hash'),
+                                        error: e && e.message ? e.message : String(e),
+                                    });
+                                return undefined;
+                            });
                     }),
                 ),
             )

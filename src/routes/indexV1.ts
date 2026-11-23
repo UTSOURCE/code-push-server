@@ -107,7 +107,7 @@ indexV1Router.post(
         const { logger, body } = req;
         logger.info('report_status/download', { body: JSON.stringify(body) });
         const { client_unique_id: clientUniqueId, label, deployment_key: deploymentKey } = body;
-        clientManager.reportStatusDownload(deploymentKey, label, clientUniqueId).catch((err) => {
+        clientManager.reportStatusDownload(deploymentKey, label, clientUniqueId, req.body, logger).catch((err) => {
             if (err instanceof AppError) {
                 logger.info('report_status/download failed', {
                     error: err.message,
@@ -138,7 +138,7 @@ indexV1Router.post(
         logger.info('report_status/deploy', { body: JSON.stringify(body) });
         const { client_unique_id: clientUniqueId, label, deployment_key: deploymentKey } = body;
         clientManager
-            .reportStatusDeploy(deploymentKey, label, clientUniqueId, req.body)
+            .reportStatusDeploy(deploymentKey, label, clientUniqueId, req.body, logger)
             .catch((err) => {
                 if (err instanceof AppError) {
                     logger.info('report_status/deploy failed', {

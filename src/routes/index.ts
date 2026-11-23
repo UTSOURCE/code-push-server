@@ -97,7 +97,7 @@ indexRouter.post(
             body: JSON.stringify(body),
         });
         const { clientUniqueId, label, deploymentKey } = body;
-        clientManager.reportStatusDownload(deploymentKey, label, clientUniqueId).catch((err) => {
+        clientManager.reportStatusDownload(deploymentKey, label, clientUniqueId, req.body, logger).catch((err) => {
             if (err instanceof AppError) {
                 logger.info('reportStatus/deploy failed', {
                     error: err.message,
@@ -130,7 +130,7 @@ indexRouter.post(
         });
         const { clientUniqueId, label, deploymentKey } = body;
         clientManager
-            .reportStatusDeploy(deploymentKey, label, clientUniqueId, req.body)
+            .reportStatusDeploy(deploymentKey, label, clientUniqueId, req.body, logger)
             .catch((err) => {
                 if (err instanceof AppError) {
                     logger.info('reportStatus/deploy failed', {
