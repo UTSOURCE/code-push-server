@@ -28,10 +28,17 @@ export interface Res<B = any> extends Response<B> {}
 export function withLogger(req: Req, res: Res, next: NextFunction) {
     const { method, path, headers } = req;
     const requestId = headers['x-request-id'] || randomUUID();
+    // nginx 反代后 req.ip 恒为 127.0.0.1，真实来源在 X-Forwarded-For 第一段。
+    const forwarded = headers['x-forwarded-for'];
+    const forwardedIp = (Array.isArray(forwarded) ? forwarded[0] : forwarded || '')
+        .split(',')[0]
+        .trim();
+    const clientIp = forwardedIp || req.ip || '';
     req.logger = logger.bindContext({
         path,
         method,
         requestId,
+        ip: clientIp,
     });
     res.header('X-Request-Id', requestId);
     next();
@@ -124,7 +131,10 @@ export function checkToken(req: Req, res: Res, next: NextFunction) {
     } else if (authToken && authType === 2) {
         checkTokenResult = checkAccessToken(authToken);
     } else {
-        res.send(new Unauthorized(`Auth type not supported.`));
+        // 旧写法 res.send(new Unauthorized(...)) 会把 Error 对象序列化成 {}
+        // 且状态码仍是 200，导致客户端无法识别"未认证"。
+        const unauthorized = new Unauthorized(`Auth type not supported.`);
+        res.status(unauthorized.status).send(unauthorized.message);
         return;
     }
 

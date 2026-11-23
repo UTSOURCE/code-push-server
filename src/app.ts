@@ -103,7 +103,12 @@ app.use((err: Error, req: Req, res: Res, next: NextFunction) => {
         res.status(err.status).send(err.message);
         thisLogger.debug(err);
     } else {
-        res.status(500).send(err.message);
+        // 中间件错误（如 body-parser 的 413 PayloadTooLarge）自带 status/statusCode，
+        // 一律按 500 处理会掩盖真实语义；仅 5xx 隐藏内部信息，详细内容进日志。
+        const status = (err as Error & { status?: number; statusCode?: number }).status
+            || (err as Error & { status?: number; statusCode?: number }).statusCode
+            || 500;
+        res.status(status).send(status >= 500 ? 'Internal Server Error' : err.message);
         thisLogger.error(err);
     }
 });

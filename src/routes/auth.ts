@@ -58,9 +58,13 @@ authRouter.post(
                     account,
                     uid: users.id,
                 });
+                // 注意：payload 里的 expiredIn 不是 JWT 标准字段，之前从未生效，
+                // 导致 web 登录 token 永久有效。这里用标准 expiresIn 明确 2 小时过期。
+                // 旧 token 无 exp 声明，仍可通过 verify（向后兼容），不会被强制登出。
                 return jwt.sign(
-                    { uid: users.id, hash: md5(users.ack_code), expiredIn: 7200 },
+                    { uid: users.id, hash: md5(users.ack_code) },
                     config.jwt.tokenSecret,
+                    { expiresIn: '2h' },
                 );
             })
             .then((token) => {
