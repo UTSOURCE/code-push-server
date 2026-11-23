@@ -433,8 +433,15 @@ class ClientManager {
                 status = DEPLOYMENT_FAILED;
             }
             const packageId = packages.id;
-            const previousDeploymentKey = _.get(others, 'previousDeploymentKey');
-            const previousLabel = _.get(others, 'previousLabelOrAppVersion');
+            // 新路由 /v0.1/public/codepush 的客户端用下划线字段，老路由 /reportStatus 用驼峰；
+            // 之前只读驼峰，导致新客户端的 previous_label/previous_deployment_key 一直存空，
+            // 「设备从哪个版本升级」的统计缺失。两种命名都兼容。
+            const previousDeploymentKey =
+                _.get(others, 'previousDeploymentKey') ||
+                _.get(others, 'previous_deployment_key');
+            const previousLabel =
+                _.get(others, 'previousLabelOrAppVersion') ||
+                _.get(others, 'previous_label_or_app_version');
             if (status > 0) {
                 return Promise.all([
                     LogReportDeploy.create({
