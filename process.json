@@ -9,7 +9,7 @@
       "env": {
         "NODE_ENV": "production",
         "STORAGE_DIR": "",
-        "DOWNLOAD_URL": "https://codepushserver.zhangyuhai.eu.org/download",
+        "DOWNLOAD_URL": "https://your-domain.example.com/download",
         "DATA_DIR": "",
         "JWT_SECRET": "REPLACE_WITH_63_CHAR_RANDOM_TOKEN",
         "RDS_USERNAME": "",
